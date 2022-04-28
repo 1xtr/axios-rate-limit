@@ -1,8 +1,6 @@
-# axios-rate-limit
+# Fork of axios-rate-limit
 
-[![npm version](https://img.shields.io/npm/v/axios-rate-limit.svg?style=flat-square)](https://www.npmjs.com/package/axios-rate-limit)
-[![npm downloads](https://img.shields.io/npm/dt/axios-rate-limit.svg?style=flat-square)](https://www.npmjs.com/package/axios-rate-limit)
-[![Build Status](https://img.shields.io/travis/aishek/axios-rate-limit.svg?style=flat-square)](https://travis-ci.org/aishek/axios-rate-limit)
+[![npm version](https://img.shields.io/npm/v/@1xtr/axios-rate-limit.svg?style=flat-square)](https://www.npmjs.com/package/axios-rate-limit)
 
 A rate limit for axios: set how many requests per interval should perform immediately, other will be delayed automatically.
 
