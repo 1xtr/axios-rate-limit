@@ -7,7 +7,7 @@ A rate limit for axios: set how many requests per interval should perform immedi
 ## Installing
 
 ```bash
-yarn add axios-rate-limit
+yarn add @1xtr/axios-rate-limit
 ```
 
 ## Usage
