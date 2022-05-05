@@ -1,6 +1,8 @@
 function AxiosRateLimit (axios) {
-  this.queue = []
-  this.timeslotRequests = 0
+  this.queue = {}
+  this.timeslotRequests = {}
+  this.timeoutId = {}
+  this.targetHeader = ''
 
   this.interceptors = {
     request: null,
@@ -14,23 +16,20 @@ function AxiosRateLimit (axios) {
 }
 
 AxiosRateLimit.prototype.getMaxRPS = function () {
-  var perSeconds = (this.perMilliseconds / 1000)
+  let perSeconds = (this.perMilliseconds / 1000)
   return this.maxRequests / perSeconds
-}
-
-AxiosRateLimit.prototype.setMaxRPS = function (rps) {
-  this.setRateLimitOptions({
-    maxRequests: rps,
-    perMilliseconds: 1000
-  })
 }
 
 AxiosRateLimit.prototype.setRateLimitOptions = function (options) {
   if (options.maxRPS) {
-    this.setMaxRPS(options.maxRPS)
+    this.maxRequests = options.maxRPS
+    this.perMilliseconds = 1000
   } else {
     this.perMilliseconds = options.perMilliseconds
     this.maxRequests = options.maxRequests
+  }
+  if (options.targetHeader) {
+    this.targetHeader = options.targetHeader
   }
 }
 
@@ -50,50 +49,72 @@ AxiosRateLimit.prototype.enable = function (axios) {
 }
 
 AxiosRateLimit.prototype.handleRequest = function (request) {
-  return new Promise(function (resolve) {
-    this.push({ resolve: function () { resolve(request) } })
-  }.bind(this))
+  let clientId = 'undefined'
+  if (request.headers && request.headers[this.targetHeader]) {
+    clientId = request.headers[this.targetHeader]
+  }
+
+  return new Promise((resolve) => {
+    this.push(clientId, {
+      resolve: function () {
+        resolve(request)
+      }
+    })
+  })
 }
 
 AxiosRateLimit.prototype.handleResponse = function (response) {
-  this.shift()
+  let clientId = 'undefined'
+  if (response.config && (response.config.headers !== undefined)) {
+    clientId = response.config.headers[this.targetHeader]
+  }
+  this.shift(clientId)
   return response
 }
 
-AxiosRateLimit.prototype.push = function (requestHandler) {
-  this.queue.push(requestHandler)
-  this.shiftInitial()
+AxiosRateLimit.prototype.push = function (clientId, requestHandler) {
+  if (Array.isArray(this.queue[clientId])) {
+    this.queue[clientId].push(requestHandler)
+  } else {
+    this.queue[clientId] = [requestHandler]
+  }
+  this.shiftInitial(clientId)
 }
 
-AxiosRateLimit.prototype.shiftInitial = function () {
-  setTimeout(function () { return this.shift() }.bind(this), 0)
+AxiosRateLimit.prototype.shiftInitial = function (clientId) {
+  setTimeout(() => {
+    return this.shift(clientId)
+  }, 0)
 }
 
-AxiosRateLimit.prototype.shift = function () {
-  if (!this.queue.length) return
-  if (this.timeslotRequests === this.maxRequests) {
-    if (this.timeoutId && typeof this.timeoutId.ref === 'function') {
-      this.timeoutId.ref()
+AxiosRateLimit.prototype.shift = function (clientId) {
+  if (!this.queue[clientId].length) return
+  if (this.timeslotRequests[clientId] === undefined) {
+    this.timeslotRequests[clientId] = 0
+  }
+  if (this.timeslotRequests[clientId] === this.maxRequests) {
+    if (this.timeoutId[clientId] &&
+      typeof this.timeoutId[clientId].ref === 'function'
+    ) {
+      this.timeoutId[clientId].ref()
     }
-
     return
   }
-
-  var queued = this.queue.shift()
+  let queued = this.queue[clientId].shift()
   queued.resolve()
 
-  if (this.timeslotRequests === 0) {
-    this.timeoutId = setTimeout(function () {
-      this.timeslotRequests = 0
-      this.shift()
-    }.bind(this), this.perMilliseconds)
+  if (this.timeslotRequests[clientId] === 0) {
+    this.timeoutId[clientId] = setTimeout(() => {
+      this.timeslotRequests[clientId] = 0
+      this.shift(clientId)
+    }, this.perMilliseconds)
 
-    if (typeof this.timeoutId.unref === 'function') {
-      if (this.queue.length === 0) this.timeoutId.unref()
+    if (typeof this.timeoutId[clientId].unref === 'function') {
+      if (this.queue[clientId].length === 0) this.timeoutId[clientId].unref()
     }
   }
 
-  this.timeslotRequests += 1
+  this.timeslotRequests[clientId] += 1
 }
 
 /**
@@ -107,26 +128,26 @@ AxiosRateLimit.prototype.shift = function () {
  *   // note maxRPS is a shorthand for perMilliseconds: 1000, and it takes precedence
  *   // if specified both with maxRequests and perMilliseconds
  *   const http = rateLimit(axios.create(), { maxRequests: 2, perMilliseconds: 1000, maxRPS: 2 })
-*    http.getMaxRPS() // 2
+ *    http.getMaxRPS() // 2
  *   http.get('https://example.com/api/v1/users.json?page=1') // will perform immediately
  *   http.get('https://example.com/api/v1/users.json?page=2') // will perform immediately
  *   http.get('https://example.com/api/v1/users.json?page=3') // will perform after 1 second from the first one
- *   http.setMaxRPS(3)
  *   http.getMaxRPS() // 3
  *   http.setRateLimitOptions({ maxRequests: 6, perMilliseconds: 150 }) // same options as constructor
  *
  * @param {Object} axios axios instance
  * @param {Object} options options for rate limit, available for live update
- * @param {Number} options.maxRequests max requests to perform concurrently in given amount of time.
- * @param {Number} options.perMilliseconds amount of time to limit concurrent requests.
+ * @param {Number=} options.maxRPS maxRPS is a shorthand for perMilliseconds: 1000.
+ * @param {Number=} options.maxRequests max requests to perform concurrently in given amount of time.
+ * @param {Number=} options.perMilliseconds amount of time to limit concurrent requests.
+ * @param {String=} options.targetHeader Header name for queueing
  * @returns {Object} axios instance with interceptors added
  */
 function axiosRateLimit (axios, options) {
-  var rateLimitInstance = new AxiosRateLimit(axios)
+  let rateLimitInstance = new AxiosRateLimit(axios)
   rateLimitInstance.setRateLimitOptions(options)
 
   axios.getMaxRPS = AxiosRateLimit.prototype.getMaxRPS.bind(rateLimitInstance)
-  axios.setMaxRPS = AxiosRateLimit.prototype.setMaxRPS.bind(rateLimitInstance)
   axios.setRateLimitOptions = AxiosRateLimit.prototype.setRateLimitOptions
     .bind(rateLimitInstance)
 

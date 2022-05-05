@@ -1,49 +1,60 @@
-var axios = require('axios')
-var sinon = require('sinon')
+const axios = require('axios')
+const sinon = require('sinon')
 
-var axiosRateLimit = require('../src/index')
+const axiosRateLimit = require('../src/index')
 
 function delay (milliseconds) {
-  return new Promise(function (resolve) {
+  return new Promise((resolve) => {
     return setTimeout(resolve, milliseconds)
   })
 }
 
-it('not delay requests less than maxRequests', async function () {
-  var maxRequests = 5
-  var perMilliseconds = 1000
-  var totalRequests = 4
-  function adapter (config) { return Promise.resolve(config) }
+/**
+ * @typedef {import('axios').AxiosResponse} AxiosResponse
+ */
 
-  var http = axiosRateLimit(
-    axios.create({ adapter: adapter }),
-    { maxRPS: maxRequests }
+it('not delay requests less than maxRequests', async () => {
+  let maxRequests = 5
+  let perMilliseconds = 1000
+  let totalRequests = 4
+  /**
+   * @param config
+   * @returns {Promise<AxiosResponse>}
+   */
+  let adapter = (config) => Promise.resolve(config)
+
+  let http = axiosRateLimit(
+    axios.create({ adapter }),
+    { maxRPS: maxRequests, targetHeader: 'target' },
   )
-
-  var onSuccess = sinon.spy()
-
-  var requests = []
-  var start = Date.now()
-  for (var i = 0; i < totalRequests; i++) {
+  
+  let onSuccess = sinon.spy()
+  
+  let requests = []
+  let start = Date.now()
+  for (let i = 0; i < totalRequests; i++) {
     requests.push(http.get('/users').then(onSuccess))
   }
-
+  
   await Promise.all(requests)
-  var end = Date.now()
+  let end = Date.now()
   expect(onSuccess.callCount).toEqual(totalRequests)
   expect(end - start).toBeLessThan(perMilliseconds)
 })
 
-it('throws an error', async function () {
-  var maxRequests = 2
-  var perMilliseconds = 1000
-  function adapter () { return Promise.reject(new Error('fail')) }
-
-  var http = axiosRateLimit(
-    axios.create({ adapter: adapter }),
-    { maxRequests: maxRequests, perMilliseconds: perMilliseconds }
+it('throws an error', async () => {
+  let maxRequests = 2
+  let perMilliseconds = 1000
+  
+  function adapter () {
+    return Promise.reject(new Error('fail'))
+  }
+  
+  let http = axiosRateLimit(
+    axios.create({ adapter }),
+    { maxRequests, perMilliseconds },
   )
-
+  
   expect.assertions(1)
   try {
     await http.get('/users')
@@ -52,44 +63,47 @@ it('throws an error', async function () {
   }
 })
 
-it('support dynamic options', async function () {
-  function adapter (config) { return Promise.resolve(config) }
-
+it('support dynamic options', async () => {
+  /**
+   * @param config AxiosRequestConfig
+   * @returns {Promise<AxiosResponse>}
+   */
+  let adapter = (config) => Promise.resolve(config)
+  
   // check constructor options
-  var http = axiosRateLimit(
-    axios.create({ adapter: adapter }),
-    { maxRequests: 2, perMilliseconds: 100 }
+  let http = axiosRateLimit(
+    axios.create({ adapter }),
+    { maxRequests: 2, perMilliseconds: 100, targetHeader: 'target' },
   )
   expect(http.getMaxRPS()).toEqual(20)
-
-  var onSuccess = sinon.spy()
-
-  var requests = []
-  var start = Date.now()
-  for (var i = 0; i < 3; i++) {
+  
+  let onSuccess = sinon.spy()
+  
+  let requests = []
+  let start = Date.now()
+  for (let i = 0; i < 3; i++) {
     requests.push(http.get('/users').then(onSuccess))
   }
   await delay(90)
   expect(onSuccess.callCount).toEqual(2)
-
+  
   await Promise.all(requests)
-  var end = Date.now()
+  let end = Date.now()
   expect(onSuccess.callCount).toEqual(3)
   expect(end - start).toBeGreaterThan(100)
   await delay(110)
-
+  
   // check setRateLimitOptions
   http.setRateLimitOptions({ maxRequests: 3, perMilliseconds: 200 })
   expect(http.getMaxRPS()).toEqual(15)
-
+  
   onSuccess = sinon.spy()
   requests = []
   start = Date.now()
-  for (var x = 0; x < 4; x++) {
+  for (let x = 0; x < 4; x++) {
     requests.push(http.get('/users').then(onSuccess))
   }
   await delay(190)
-  end = Date.now()
   expect(onSuccess.callCount).toEqual(3)
 
   await Promise.all(requests)
@@ -98,22 +112,4 @@ it('support dynamic options', async function () {
   expect(end - start).toBeGreaterThan(200)
   await delay(210)
 
-  // check setMaxRPS
-  http.setMaxRPS(3)
-  expect(http.getMaxRPS()).toEqual(3)
-
-  onSuccess = sinon.spy()
-  requests = []
-  start = Date.now()
-  for (var z = 0; z < 4; z++) {
-    requests.push(http.get('/users').then(onSuccess))
-  }
-  await delay(990)
-  end = Date.now()
-  expect(onSuccess.callCount).toEqual(3)
-
-  await Promise.all(requests)
-  end = Date.now()
-  expect(onSuccess.callCount).toEqual(4)
-  expect(end - start).toBeGreaterThan(1000)
 })
