@@ -9,15 +9,20 @@ function delay (milliseconds) {
   })
 }
 
+/**
+ * @typedef {import('axios').AxiosResponse} AxiosResponse
+ */
+
 it('not delay requests less than maxRequests', async () => {
   let maxRequests = 5
   let perMilliseconds = 1000
   let totalRequests = 4
-  
-  function adapter (config) {
-    return Promise.resolve(config)
-  }
-  
+  /**
+   * @param config
+   * @returns {Promise<AxiosResponse>}
+   */
+  let adapter = (config) => Promise.resolve(config)
+
   let http = axiosRateLimit(
     axios.create({ adapter }),
     { maxRPS: maxRequests, targetHeader: 'target' },
@@ -59,9 +64,11 @@ it('throws an error', async () => {
 })
 
 it('support dynamic options', async () => {
-  function adapter (config) {
-    return Promise.resolve(config)
-  }
+  /**
+   * @param config AxiosRequestConfig
+   * @returns {Promise<AxiosResponse>}
+   */
+  let adapter = (config) => Promise.resolve(config)
   
   // check constructor options
   let http = axiosRateLimit(
