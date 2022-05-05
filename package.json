@@ -10,6 +10,8 @@
   "homepage": "https://github.com/1xtr/axios-rate-limit.git#readme",
   "devDependencies": {
     "@logux/eslint-config": "^47.2.0",
+    "@typescript-eslint/eslint-plugin": "^5.22.0",
+    "@typescript-eslint/parser": "^5.22.0",
     "axios": "^0.27.2",
     "eslint": "^8.14.0",
     "eslint-ci": "^1.0.0",
@@ -39,7 +41,7 @@
   ],
   "scripts": {
     "watch": "yarn jest --watch",
-    "test": "jest --forceExit --runInBand --coverage --detectOpenHandles && yarn lint",
+    "test": "jest --forceExit --runInBand --coverage --detectOpenHandles && yarn lint && yarn spell",
     "lint": "eslint src/index.js __tests__/index.js",
     "jest": "jest src/index.js __tests__/index.js",
     "spell": "yaspeller-ci *.md"
@@ -60,7 +62,10 @@
     "plugins": [
       "jest"
     ],
-    "extends": "@logux/eslint-config",
+    "extends": [
+      "@logux/eslint-config",
+      "plugin:@typescript-eslint/recommended"
+    ],
     "env": {
       "jest/globals": true
     },
@@ -70,7 +75,8 @@
         {
           "ignoreComments": true
         }
-      ]
+      ],
+      "@typescript-eslint/no-var-requires": 0
     }
   },
   "husky": {
